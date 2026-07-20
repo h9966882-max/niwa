@@ -6,7 +6,7 @@
 <title>わたしの庭づくり</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/rough.js/4.6.6/rough.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
 <style>
   :root{
     --sky-top:#eaf4ea;
@@ -228,6 +228,14 @@
   </div>
 </div>
 
+<div id="errBox" style="display:none;position:fixed;inset:0;z-index:999;background:#fff3f0;color:#7a2b1a;font-family:monospace;font-size:13px;padding:20px;overflow:auto;white-space:pre-wrap;"></div>
+<script>
+window.addEventListener('error', (e)=>{
+  const box = document.getElementById('errBox');
+  box.style.display = 'block';
+  box.textContent = '読み込みエラーが発生しました:\n' + (e.message||'') + '\n' + (e.filename? e.filename+':'+e.lineno : '');
+});
+</script>
 <script>
 /* ============================================================
    わたしの庭づくり - Phase 1: 庭マップ + キャラ移動 + スポット発見
