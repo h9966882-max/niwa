@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>わたしの庭づくり</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/rough.js/4.6.6/rough.js"></script>
+<style>
+  :root{
+    --sky-top:#eaf4ea;
+    --sky-bottom:#fdf6e8;
+    --ink:#3d3428;
+    --ink-soft:#6b5f4c;
+    --cream:#fffbf2;
+    --cream-edge:#e8dcc0;
+    --sun:#f4c95d;
+    --flower-pink:#e8a0bf;
+    --leaf:#6b8f5c;
+    --shadow:rgba(61,52,40,0.18);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    color:var(--ink);
+    background:linear-gradient(180deg,var(--sky-top),var(--sky-bottom));
+    touch-action:none;
+    user-select:none;
+  }
+  #app{ position:relative; width:100vw; height:100vh; height:100dvh; overflow:hidden; }
+  canvas{ position:absolute; top:0; left:0; display:block; }
+  #gameCanvas{ z-index:1; }
+
+  /* --- top bar --- */
+  #topbar{
+    position:absolute; top:0; left:0; right:0; z-index:10;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 16px;
+    pointer-events:none;
+  }
+  .badge{
+    pointer-events:auto;
+    display:flex; align-items:center; gap:8px;
+    background:var(--cream);
+    border:2px solid var(--cream-edge);
+    border-radius:16px;
+    padding:8px 14px;
+    box-shadow:0 3px 0 var(--cream-edge);
+    font-family:'Klee One', sans-serif;
+    font-size:15px;
+  }
+  #seasonBadge .icon{ font-size:18px; }
+  #invBtn{
+    display:flex; align-items:center; gap:6px;
+    cursor:pointer;
+    font-weight:600;
+  }
+  #invBtn .count{
+    background:var(--flower-pink);
+    color:#fff;
+    border-radius:10px;
+    padding:1px 8px;
+    font-size:13px;
+  }
+
+  /* --- title --- */
+  #titleWrap{
+    position:absolute; top:12px; left:50%; transform:translateX(-50%);
+    z-index:9;
+    font-family:'Klee One', sans-serif;
+    font-size:15px;
+    color:var(--ink-soft);
+    background:rgba(255,251,242,0.7);
+    padding:4px 14px;
+    border-radius:20px;
+    pointer-events:none;
+    letter-spacing:0.05em;
+  }
+
+  /* --- interact button (floats above character) --- */
+  #interactBtn{
+    position:absolute; z-index:8;
+    transform:translate(-50%,-100%);
+    background:var(--sun);
+    border:2px solid #d9a93a;
+    color:var(--ink);
+    font-family:'Klee One', sans-serif;
+    font-size:14px;
+    font-weight:600;
+    padding:8px 16px;
+    border-radius:20px;
+    box-shadow:0 3px 0 #d9a93a;
+    display:none;
+    cursor:pointer;
+    white-space:nowrap;
+    animation:bob 1.4s ease-in-out infinite;
+  }
+  @keyframes bob{
+    0%,100%{ margin-top:0; }
+    50%{ margin-top:-6px; }
+  }
+
+  /* --- discovery popup --- */
+  #discoverOverlay{
+    position:fixed; inset:0; z-index:30;
+    display:none;
+    align-items:center; justify-content:center;
+    background:rgba(61,52,40,0.35);
+  }
+  #discoverCard{
+    background:var(--cream);
+    border:3px solid var(--cream-edge);
+    border-radius:24px;
+    padding:28px 32px 24px;
+    text-align:center;
+    max-width:280px;
+    box-shadow:0 6px 0 var(--cream-edge);
+    animation:pop 0.35s cubic-bezier(.34,1.56,.64,1);
+  }
+  @keyframes pop{
+    0%{ transform:scale(0.7); opacity:0; }
+    100%{ transform:scale(1); opacity:1; }
+  }
+  #discoverCard .label{
+    font-family:'Klee One', sans-serif;
+    font-size:13px;
+    color:var(--ink-soft);
+    margin-bottom:8px;
+  }
+  #discoverCard canvas{ position:static; margin:4px auto 10px; }
+  #discoverCard .itemName{
+    font-family:'Klee One', sans-serif;
+    font-size:20px;
+    font-weight:600;
+    margin-bottom:4px;
+  }
+  #discoverCard .itemDesc{
+    font-size:13px;
+    color:var(--ink-soft);
+    margin-bottom:18px;
+  }
+  #discoverCard button{
+    font-family:'Klee One', sans-serif;
+    font-size:15px;
+    font-weight:600;
+    background:var(--leaf);
+    color:#fff;
+    border:none;
+    border-radius:16px;
+    padding:10px 28px;
+    box-shadow:0 3px 0 #566f45;
+    cursor:pointer;
+  }
+
+  /* --- inventory sheet --- */
+  #invSheet{
+    position:absolute; left:0; right:0; bottom:0; z-index:20;
+    background:var(--cream);
+    border-top:3px solid var(--cream-edge);
+    border-radius:24px 24px 0 0;
+    box-shadow:0 -4px 16px var(--shadow);
+    max-height:60vh;
+    transform:translateY(100%);
+    transition:transform 0.3s ease;
+    display:flex; flex-direction:column;
+  }
+  #invSheet.open{ transform:translateY(0); }
+  #invHandle{
+    width:40px; height:5px; background:var(--cream-edge);
+    border-radius:3px; margin:10px auto 4px;
+  }
+  #invHeader{
+    font-family:'Klee One', sans-serif;
+    font-size:17px; font-weight:600;
+    text-align:center;
+    padding:6px 0 12px;
+    border-bottom:1px solid var(--cream-edge);
+  }
+  #invList{
+    overflow-y:auto;
+    padding:14px 18px 24px;
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(78px,1fr));
+    gap:14px;
+  }
+  .invItem{
+    display:flex; flex-direction:column; align-items:center;
+    gap:4px;
+  }
+  .invItem canvas{ position:static; }
+  .invItem .n{ font-size:12px; text-align:center; line-height:1.2; }
+  .invItem .c{ font-size:11px; color:var(--ink-soft); }
+  #invEmpty{
+    text-align:center; color:var(--ink-soft); font-size:13px; padding:30px 0;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="bgCanvas"></canvas>
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="titleWrap">🌿 わたしの庭づくり</div>
+
+  <div id="topbar">
+    <div class="badge" id="seasonBadge"><span class="icon">🌸</span><span id="seasonText">春</span></div>
+    <div class="badge" id="invBtn"><span>🎒 アイテム</span><span class="count" id="invCount">0</span></div>
+  </div>
+
+  <button id="interactBtn">🔍 調べる</button>
+
+  <div id="invSheet">
+    <div id="invHandle"></div>
+    <div id="invHeader">集めたもの</div>
+    <div id="invList"></div>
+  </div>
+
+  <div id="discoverOverlay">
+    <div id="discoverCard">
+      <div class="label">見つけた!</div>
+      <canvas id="discoverIcon" width="90" height="90"></canvas>
+      <div class="itemName" id="discoverName"></div>
+      <div class="itemDesc" id="discoverDesc"></div>
+      <button id="discoverClose">やった!</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   わたしの庭づくり - Phase 1: 庭マップ + キャラ移動 + スポット発見
+   ============================================================ */
+
+const bgCanvas = document.getElementById('bgCanvas');
+const gameCanvas = document.getElementById('gameCanvas');
+const bgCtx = bgCanvas.getContext('2d');
+const gameCtx = gameCanvas.getContext('2d');
+const rcBg = rough.canvas(bgCanvas);
+const rcGame = rough.canvas(gameCanvas);
+
+let W = 0, H = 0, DPR = 1;
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth;
+  H = window.innerHeight;
+  [bgCanvas, gameCanvas].forEach(c=>{
+    c.width = W*DPR; c.height = H*DPR;
+    c.style.width = W+'px'; c.style.height = H+'px';
+  });
+  bgCtx.setTransform(DPR,0,0,DPR,0,0);
+  gameCtx.setTransform(DPR,0,0,DPR,0,0);
+  layoutSpots();
+  drawBackground();
+}
+
+/* ---------------- スポット定義 ---------------- */
+// 座標は0-1の相対値で持ち、resize時に実座標へ変換する
+const spotDefs = [
+  { id:'flowerbed', name:'花壇', relX:0.28, relY:0.62, r:60 },
+  { id:'tree',      name:'木',   relX:0.75, relY:0.38, r:65 },
+  { id:'pond',      name:'池',   relX:0.68, relY:0.75, r:70 },
+  { id:'shed',      name:'物置', relX:0.18, relY:0.30, r:55 },
+];
+
+function layoutSpots(){
+  spotDefs.forEach(s=>{
+    s.x = s.relX * W;
+    s.y = s.relY * H;
+  });
+}
+
+/* ---------------- アイテムの見つかりテーブル ---------------- */
+const itemPool = {
+  flowerbed: [
+    { id:'seed_flower', name:'花の種', desc:'花壇に植えられそう', shape:'seed', color:'#e8a0bf', weight:5 },
+    { id:'petal', name:'花びら', desc:'ひらひら舞い落ちた', shape:'petal', color:'#f2c6d8', weight:5 },
+    { id:'rare_bloom', name:'めずらしい花', desc:'この季節だけ咲く花', shape:'flower', color:'#c874a3', weight:1 },
+  ],
+  tree: [
+    { id:'wood', name:'木材', desc:'DIYの基本素材', shape:'wood', color:'#a97c50', weight:5 },
+    { id:'acorn', name:'どんぐり', desc:'ころんと丸い', shape:'acorn', color:'#8a6238', weight:4 },
+    { id:'honey', name:'はちみつ', desc:'木のうろで見つけた', shape:'jar', color:'#e3a63a', weight:1 },
+  ],
+  pond: [
+    { id:'pebble', name:'小石', desc:'すべすべしてる', shape:'pebble', color:'#9fa8a3', weight:5 },
+    { id:'shell', name:'貝殻', desc:'水辺で光っていた', shape:'shell', color:'#f2ece0', weight:4 },
+    { id:'fish', name:'小さな魚', desc:'跳ねて逃げようとした', shape:'fish', color:'#7eb8bc', weight:1 },
+  ],
+  shed: [
+    { id:'cloth', name:'布きれ', desc:'家具の張地に使えそう', shape:'cloth', color:'#c9b28a', weight:5 },
+    { id:'nail', name:'くぎ', desc:'古い箱に入っていた', shape:'nail', color:'#8a8580', weight:4 },
+    { id:'tool', name:'古い道具', desc:'まだ使えそう', shape:'tool', color:'#7a6a52', weight:1 },
+  ],
+};
+
+function weightedPick(list){
+  const total = list.reduce((a,b)=>a+b.weight,0);
+  let r = Math.random()*total;
+  for(const it of list){ r -= it.weight; if(r<=0) return it; }
+  return list[0];
+}
+
+/* ---------------- インベントリ (localStorage) ---------------- */
+const SAVE_KEY = 'niwa_inventory_v1';
+function loadInventory(){
+  try{ return JSON.parse(localStorage.getItem(SAVE_KEY)) || {}; }
+  catch(e){ return {}; }
+}
+function saveInventory(inv){
+  localStorage.setItem(SAVE_KEY, JSON.stringify(inv));
+}
+let inventory = loadInventory();
+
+function addItem(item){
+  if(!inventory[item.id]){
+    inventory[item.id] = { ...item, count:0 };
+  }
+  inventory[item.id].count++;
+  saveInventory(inventory);
+  updateInvBadge();
+}
+
+function updateInvBadge(){
+  const total = Object.values(inventory).reduce((a,b)=>a+b.count,0);
+  document.getElementById('invCount').textContent = total;
+}
+
+/* ---------------- 背景描画 (静的: 芝生・小道・スポット) ---------------- */
+function drawBackground(){
+  bgCtx.clearRect(0,0,W,H);
+
+  // 空気感のある地面ベース
+  bgCtx.fillStyle = '#dcead0';
+  bgCtx.fillRect(0,0,W,H);
+
+  // 芝生の質感 (ラフな短い線を撒く)
+  const grassSeedRand = mulberry32(42);
+  for(let i=0;i<W*H/1800;i++){
+    const x = grassSeedRand()*W;
+    const y = grassSeedRand()*H;
+    const len = 6+grassSeedRand()*8;
+    const angle = -Math.PI/2 + (grassSeedRand()-0.5)*0.9;
+    rcBg.line(x,y, x+Math.cos(angle)*len, y+Math.sin(angle)*len, {
+      stroke: grassSeedRand()>0.5 ? '#8fad6f' : '#79996055',
+      strokeWidth:1.4, roughness:1.6, seed: Math.floor(grassSeedRand()*1000)
+    });
+  }
+
+  // 小道 (曲がったパス)
+  rcBg.path(`M ${W*0.5} ${H*1.02} C ${W*0.42} ${H*0.85}, ${W*0.55} ${H*0.65}, ${W*0.46} ${H*0.45} C ${W*0.4} ${H*0.3}, ${W*0.5} ${H*0.15}, ${W*0.48} ${-H*0.02}`, {
+    stroke:'#c9b98a', strokeWidth: Math.max(30, W*0.09), roughness:2.2, fill:'#e3d6ae',
+    fillStyle:'solid', seed:7
+  });
+
+  // スポットを描画
+  spotDefs.forEach(s=>drawSpot(s));
+}
+
+function mulberry32(seed){
+  let a = seed;
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function drawSpot(s){
+  const {x,y,id} = s;
+  if(id==='flowerbed'){
+    rcBg.ellipse(x,y+18,120,55,{fill:'#8a6238', fillStyle:'hachure', hachureGap:4, roughness:2, stroke:'#6b4c2a', seed:11});
+    const flowerColors = ['#e8a0bf','#f4c95d','#c874a3','#f2ece0'];
+    for(let i=0;i<7;i++){
+      const fx = x + Math.cos(i*1.3)*45*Math.random();
+      const fy = y+10 + Math.sin(i*1.7)*18*Math.random();
+      rcBg.circle(fx,fy,10,{fill:flowerColors[i%flowerColors.length], fillStyle:'solid', roughness:1.8, stroke:'#5a4c3a', seed:20+i});
+    }
+  } else if(id==='tree'){
+    rcBg.rectangle(x-10,y,20,70,{fill:'#8a6238', fillStyle:'hachure', roughness:2, stroke:'#5a4025', seed:31});
+    rcBg.circle(x, y-40, 95, {fill:'#6b8f5c', fillStyle:'hachure', hachureGap:5, roughness:2.2, stroke:'#4f6b43', seed:32});
+    rcBg.circle(x-40, y-15, 65, {fill:'#79a366', fillStyle:'hachure', hachureGap:5, roughness:2.2, stroke:'#4f6b43', seed:33});
+    rcBg.circle(x+45, y-10, 60, {fill:'#79a366', fillStyle:'hachure', hachureGap:5, roughness:2.2, stroke:'#4f6b43', seed:34});
+  } else if(id==='pond'){
+    rcBg.ellipse(x,y,150,90,{fill:'#a9d8da', fillStyle:'hachure', hachureGap:3.5, roughness:2, stroke:'#6b9a9c', strokeWidth:2.5, seed:41});
+    rcBg.ellipse(x-20,y-10,40,18,{fill:'#dff2f2', fillStyle:'solid', roughness:1.5, stroke:'none', seed:42});
+  } else if(id==='shed'){
+    rcBg.rectangle(x-45,y-10,90,60,{fill:'#c9b28a', fillStyle:'hachure', roughness:2, stroke:'#8a6238', seed:51});
+    rcBg.polygon([[x-52,y-10],[x,y-48],[x+52,y-10]],{fill:'#8a5a3a', fillStyle:'solid', roughness:2, stroke:'#5a3c22', seed:52});
+    rcBg.rectangle(x-10,y+20,20,30,{fill:'#5a3c22', fillStyle:'solid', roughness:1.8, seed:53});
+  }
+
+  // ラベル
+  bgCtx.font = "13px 'Klee One', sans-serif";
+  bgCtx.fillStyle = '#3d3428';
+  bgCtx.textAlign = 'center';
+  bgCtx.fillText(s.name, x, y + s.r + 22);
+}
+
+/* ---------------- キャラクター ---------------- */
+const player = {
+  x: 0, y:0, targetX:0, targetY:0,
+  speed: 200, // px/sec
+  walking:false,
+  facing: 1, // 1=right, -1=left
+  animT: 0,
+};
+
+function initPlayer(){
+  player.x = W*0.5; player.y = H*0.55;
+  player.targetX = player.x; player.targetY = player.y;
+}
+
+function setTarget(x,y){
+  player.targetX = x;
+  player.targetY = y;
+}
+
+/* ---------------- 入力 ---------------- */
+gameCanvas.addEventListener('pointerdown', (e)=>{
+  const rect = gameCanvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  setTarget(x,y);
+});
+
+document.getElementById('interactBtn').addEventListener('click', ()=>{
+  if(nearestSpot) triggerDiscovery(nearestSpot);
+});
+
+document.getElementById('invBtn').addEventListener('click', ()=>{
+  toggleInventory(true);
+});
+document.getElementById('invHandle').addEventListener('click', ()=>{
+  toggleInventory(false);
+});
+
+let invOpen = false;
+function toggleInventory(forceOpen){
+  invOpen = forceOpen !== undefined ? forceOpen : !invOpen;
+  const sheet = document.getElementById('invSheet');
+  if(invOpen){ renderInventory(); sheet.classList.add('open'); }
+  else{ sheet.classList.remove('open'); }
+}
+
+function renderInventory(){
+  const list = document.getElementById('invList');
+  list.innerHTML = '';
+  const items = Object.values(inventory).sort((a,b)=>b.count-a.count);
+  if(items.length===0){
+    list.innerHTML = '<div id="invEmpty">まだ何も見つけてないよ。庭を歩いて探してみよう🌱</div>';
+    return;
+  }
+  items.forEach(item=>{
+    const wrap = document.createElement('div');
+    wrap.className = 'invItem';
+    const cv = document.createElement('canvas');
+    cv.width = 56; cv.height = 56;
+    wrap.appendChild(cv);
+    const n = document.createElement('div');
+    n.className = 'n'; n.textContent = item.name;
+    const c = document.createElement('div');
+    c.className = 'c'; c.textContent = '×'+item.count;
+    wrap.appendChild(n); wrap.appendChild(c);
+    list.appendChild(wrap);
+    drawItemIcon(cv, item, 28, 30, 20);
+  });
+}
+
+/* ---------------- アイテムアイコン描画 (rough.js) ---------------- */
+function drawItemIcon(canvasEl, item, cx, cy, scale){
+  const rc = rough.canvas(canvasEl);
+  const ctx = canvasEl.getContext('2d');
+  ctx.clearRect(0,0,canvasEl.width, canvasEl.height);
+  const col = item.color;
+  const opt = { fill:col, fillStyle:'solid', roughness:1.6, stroke:'#3d3428', strokeWidth:1.3, seed:99 };
+  switch(item.shape){
+    case 'seed':
+      rc.ellipse(cx,cy,scale*0.5,scale*0.8, opt); break;
+    case 'petal':
+      rc.ellipse(cx,cy,scale*0.9,scale*0.5, {...opt, seed:5}); break;
+    case 'flower':
+      for(let i=0;i<5;i++){
+        const a = i*(Math.PI*2/5);
+        rc.circle(cx+Math.cos(a)*scale*0.4, cy+Math.sin(a)*scale*0.4, scale*0.5, {...opt, seed:10+i});
+      }
+      rc.circle(cx,cy,scale*0.35,{...opt, fill:'#f4c95d', seed:20}); break;
+    case 'wood':
+      rc.rectangle(cx-scale*0.6, cy-scale*0.35, scale*1.2, scale*0.7, opt); break;
+    case 'acorn':
+      rc.circle(cx,cy+scale*0.15,scale*0.7,opt);
+      rc.rectangle(cx-scale*0.4,cy-scale*0.6,scale*0.8,scale*0.35,{...opt, fill:'#6b4c2a'}); break;
+    case 'jar':
+      rc.rectangle(cx-scale*0.45,cy-scale*0.6,scale*0.9,scale*1.1,{...opt, fillStyle:'hachure'}); break;
+    case 'pebble':
+      rc.polygon([[cx-scale*0.6,cy+scale*0.3],[cx-scale*0.2,cy-scale*0.5],[cx+scale*0.5,cy-scale*0.2],[cx+scale*0.4,cy+scale*0.5]],opt); break;
+    case 'shell':
+      rc.arc(cx,cy,scale*1.3,scale*1.3,Math.PI,Math.PI*2,true,opt); break;
+    case 'fish':
+      rc.ellipse(cx-scale*0.15,cy,scale*1.0,scale*0.5,opt);
+      rc.polygon([[cx+scale*0.6,cy],[cx+scale*1.0,cy-scale*0.35],[cx+scale*1.0,cy+scale*0.35]],opt); break;
+    case 'cloth':
+      rc.rectangle(cx-scale*0.6,cy-scale*0.5,scale*1.2,scale*1.0,{...opt, fillStyle:'hachure'}); break;
+    case 'nail':
+      rc.line(cx,cy-scale*0.7,cx,cy+scale*0.6,{stroke:col,strokeWidth:4,roughness:1.5,seed:30});
+      rc.line(cx-scale*0.35,cy-scale*0.7,cx+scale*0.35,cy-scale*0.7,{stroke:col,strokeWidth:4,roughness:1.5,seed:31}); break;
+    case 'tool':
+      rc.rectangle(cx-scale*0.15,cy-scale*0.7,scale*0.3,scale*1.0,opt);
+      rc.circle(cx,cy+scale*0.4,scale*0.5,opt); break;
+    default:
+      rc.circle(cx,cy,scale*0.6,opt);
+  }
+}
+
+/* ---------------- 発見演出 ---------------- */
+function triggerDiscovery(spot){
+  const pool = itemPool[spot.id];
+  const item = weightedPick(pool);
+  addItem(item);
+
+  document.getElementById('discoverName').textContent = item.name;
+  document.getElementById('discoverDesc').textContent = item.desc;
+  const cv = document.getElementById('discoverIcon');
+  drawItemIcon(cv, item, 45, 48, 32);
+  document.getElementById('discoverOverlay').style.display = 'flex';
+
+  // クールダウン: 同じスポットは少し間を置く
+  spot.cooldownUntil = performance.now() + 1500;
+  document.getElementById('interactBtn').style.display = 'none';
+}
+document.getElementById('discoverClose').addEventListener('click', ()=>{
+  document.getElementById('discoverOverlay').style.display = 'none';
+});
+
+/* ---------------- ゲームループ ---------------- */
+let lastT = performance.now();
+let nearestSpot = null;
+
+function update(dt){
+  const dx = player.targetX - player.x;
+  const dy = player.targetY - player.y;
+  const dist = Math.hypot(dx,dy);
+  if(dist > 3){
+    const step = Math.min(dist, player.speed*dt);
+    player.x += (dx/dist)*step;
+    player.y += (dy/dist)*step;
+    player.walking = true;
+    player.facing = dx >= 0 ? 1 : -1;
+    player.animT += dt;
+  } else {
+    player.walking = false;
+  }
+
+  // 最寄りスポット判定
+  nearestSpot = null;
+  let minD = Infinity;
+  const now = performance.now();
+  spotDefs.forEach(s=>{
+    const d = Math.hypot(player.x-s.x, player.y-s.y);
+    if(d < s.r + 30 && d < minD && !(s.cooldownUntil && now < s.cooldownUntil)){
+      minD = d; nearestSpot = s;
+    }
+  });
+
+  const btn = document.getElementById('interactBtn');
+  if(nearestSpot){
+    btn.style.display = 'block';
+    btn.style.left = nearestSpot.x + 'px';
+    btn.style.top = (nearestSpot.y - nearestSpot.r*0.4) + 'px';
+    btn.textContent = '🔍 ' + nearestSpot.name + 'をしらべる';
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+function drawPlayer(){
+  const {x,y} = player;
+  const bob = player.walking ? Math.sin(player.animT*10)*4 : 0;
+  gameCtx.save();
+  gameCtx.translate(x,y+bob);
+  gameCtx.scale(player.facing,1);
+
+  // 影
+  gameCtx.save();
+  gameCtx.translate(-x,-y-bob);
+  rcGame.ellipse(x,y+38,46,12,{fill:'#3d3428', fillStyle:'solid', roughness:1.5, stroke:'none', fillWeight: 3, seed:60});
+  gameCtx.globalAlpha = 0.15;
+  gameCtx.restore();
+
+  // 体
+  rcGame.rectangle(-16,-10,32,42,{fill:'#e8956b', fillStyle:'hachure', hachureGap:3, roughness:2, stroke:'#3d3428', seed:61});
+  // 頭
+  rcGame.circle(0,-30,34,{fill:'#f2d3ae', fillStyle:'solid', roughness:1.8, stroke:'#3d3428', seed:62});
+  // 髪
+  rcGame.arc(0,-38,38,38,Math.PI*1.1,Math.PI*1.95,true,{fill:'#5a4436', fillStyle:'solid', roughness:1.8, stroke:'#3d3428', seed:63});
+  // 足 (歩行アニメ)
+  const legSwing = player.walking ? Math.sin(player.animT*10)*8 : 0;
+  rcGame.line(-8,32,-8+legSwing,50,{stroke:'#5a4436', strokeWidth:5, roughness:1.8, seed:64});
+  rcGame.line(8,32,8-legSwing,50,{stroke:'#5a4436', strokeWidth:5, roughness:1.8, seed:65});
+
+  gameCtx.restore();
+}
+
+function loop(t){
+  const dt = Math.min((t-lastT)/1000, 0.05);
+  lastT = t;
+  update(dt);
+  gameCtx.clearRect(0,0,W,H);
+  drawPlayer();
+  requestAnimationFrame(loop);
+}
+
+/* ---------------- 初期化 ---------------- */
+window.addEventListener('resize', resize);
+resize();
+initPlayer();
+updateInvBadge();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
