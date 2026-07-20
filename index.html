@@ -171,12 +171,31 @@
     width:40px; height:5px; background:var(--cream-edge);
     border-radius:3px; margin:10px auto 4px;
   }
+  #invBackdrop{
+    position:fixed; inset:0; z-index:19;
+    background:rgba(61,52,40,0.25);
+    opacity:0; pointer-events:none;
+    transition:opacity 0.3s ease;
+  }
+  #invBackdrop.open{ opacity:1; pointer-events:auto; }
   #invHeader{
+    position:relative;
     font-family:'Klee One', sans-serif;
     font-size:17px; font-weight:600;
     text-align:center;
     padding:6px 0 12px;
     border-bottom:1px solid var(--cream-edge);
+  }
+  #invCloseBtn{
+    position:absolute; right:14px; top:50%; transform:translateY(-60%);
+    width:34px; height:34px;
+    border-radius:50%;
+    border:none;
+    background:var(--cream-edge);
+    color:var(--ink);
+    font-size:16px;
+    line-height:1;
+    cursor:pointer;
   }
   #invList{
     overflow-y:auto;
@@ -211,9 +230,10 @@
 
   <button id="interactBtn">🔍 調べる</button>
 
+  <div id="invBackdrop"></div>
   <div id="invSheet">
     <div id="invHandle"></div>
-    <div id="invHeader">集めたもの</div>
+    <div id="invHeader">集めたもの<button id="invCloseBtn" aria-label="閉じる">✕</button></div>
     <div id="invList"></div>
   </div>
 
@@ -445,13 +465,20 @@ document.getElementById('invBtn').addEventListener('click', ()=>{
 document.getElementById('invHandle').addEventListener('click', ()=>{
   toggleInventory(false);
 });
+document.getElementById('invCloseBtn').addEventListener('click', ()=>{
+  toggleInventory(false);
+});
+document.getElementById('invBackdrop').addEventListener('click', ()=>{
+  toggleInventory(false);
+});
 
 let invOpen = false;
 function toggleInventory(forceOpen){
   invOpen = forceOpen !== undefined ? forceOpen : !invOpen;
   const sheet = document.getElementById('invSheet');
-  if(invOpen){ renderInventory(); sheet.classList.add('open'); }
-  else{ sheet.classList.remove('open'); }
+  const backdrop = document.getElementById('invBackdrop');
+  if(invOpen){ renderInventory(); sheet.classList.add('open'); backdrop.classList.add('open'); }
+  else{ sheet.classList.remove('open'); backdrop.classList.remove('open'); }
 }
 
 function renderInventory(){
