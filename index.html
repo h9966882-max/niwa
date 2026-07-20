@@ -214,6 +214,103 @@
   #invEmpty{
     text-align:center; color:var(--ink-soft); font-size:13px; padding:30px 0;
   }
+
+  /* --- DIY overlay --- */
+  #diyOverlay{
+    position:fixed; inset:0; z-index:25;
+    display:none;
+    align-items:flex-end; justify-content:center;
+    background:rgba(61,52,40,0.35);
+  }
+  #diyCard{
+    position:relative;
+    background:var(--cream);
+    border:3px solid var(--cream-edge);
+    border-radius:24px 24px 0 0;
+    width:100%;
+    max-width:520px;
+    max-height:78vh;
+    display:flex; flex-direction:column;
+    box-shadow:0 -4px 16px var(--shadow);
+    animation:slideUp 0.3s ease;
+  }
+  @keyframes slideUp{
+    0%{ transform:translateY(30px); opacity:0; }
+    100%{ transform:translateY(0); opacity:1; }
+  }
+  #diyHeader{
+    position:relative;
+    font-family:'Klee One', sans-serif;
+    font-size:17px; font-weight:600;
+    text-align:center;
+    padding:16px 0 12px;
+    border-bottom:1px solid var(--cream-edge);
+  }
+  #diyCloseBtn{
+    position:absolute; right:14px; top:50%; transform:translateY(-50%);
+    width:34px; height:34px;
+    border-radius:50%;
+    border:none;
+    background:var(--cream-edge);
+    color:var(--ink);
+    font-size:16px;
+    cursor:pointer;
+  }
+  #diyList{
+    overflow-y:auto;
+    padding:14px 16px 28px;
+    display:flex; flex-direction:column; gap:12px;
+  }
+  .recipeRow{
+    display:flex; align-items:center; gap:12px;
+    background:#fff;
+    border:2px solid var(--cream-edge);
+    border-radius:16px;
+    padding:10px 12px;
+  }
+  .recipeRow .icon canvas{ position:static; display:block; }
+  .recipeRow .info{ flex:1; min-width:0; }
+  .recipeRow .rName{ font-family:'Klee One', sans-serif; font-size:15px; font-weight:600; margin-bottom:2px; }
+  .recipeRow .rDesc{ font-size:11px; color:var(--ink-soft); margin-bottom:6px; }
+  .recipeRow .mats{ display:flex; flex-wrap:wrap; gap:6px; }
+  .matChip{
+    display:flex; align-items:center; gap:3px;
+    background:var(--sky-top);
+    border-radius:10px;
+    padding:2px 6px;
+    font-size:11px;
+  }
+  .matChip.short{ background:#fbe4e0; color:#a4432f; }
+  .matChip canvas{ position:static; }
+  .craftBtn{
+    font-family:'Klee One', sans-serif;
+    font-size:13px; font-weight:600;
+    background:var(--leaf);
+    color:#fff;
+    border:none;
+    border-radius:14px;
+    padding:8px 14px;
+    box-shadow:0 3px 0 #566f45;
+    cursor:pointer;
+    white-space:nowrap;
+    flex-shrink:0;
+  }
+.craftBtn:disabled{
+    background:#c9c2b3;
+    box-shadow:0 3px 0 #a9a290;
+    cursor:not-allowed;
+  }
+  #diyToast{
+    position:absolute; left:50%; bottom:14px; transform:translate(-50%,20px);
+    background:var(--leaf); color:#fff;
+    font-family:'Klee One', sans-serif; font-size:14px; font-weight:600;
+    padding:10px 20px; border-radius:20px;
+    box-shadow:0 3px 0 #566f45;
+    opacity:0; pointer-events:none;
+    transition:opacity 0.25s ease, transform 0.25s ease;
+    white-space:nowrap;
+  }
+  #diyToast.show{ opacity:1; transform:translate(-50%,0); }
 </style>
 </head>
 <body>
@@ -239,11 +336,19 @@
 
   <div id="discoverOverlay">
     <div id="discoverCard">
-      <div class="label">見つけた!</div>
+      <div class="label" id="discoverLabel">見つけた!</div>
       <canvas id="discoverIcon" width="90" height="90"></canvas>
       <div class="itemName" id="discoverName"></div>
       <div class="itemDesc" id="discoverDesc"></div>
       <button id="discoverClose">やった!</button>
+    </div>
+  </div>
+
+  <div id="diyOverlay">
+    <div id="diyCard">
+      <div id="diyHeader">🔨 DIYレシピ<button id="diyCloseBtn" aria-label="閉じる">✕</button></div>
+      <div id="diyList"></div>
+      <div id="diyToast"></div>
     </div>
   </div>
 </div>
@@ -287,10 +392,10 @@ function resize(){
 /* ---------------- スポット定義 ---------------- */
 // 座標は0-1の相対値で持ち、resize時に実座標へ変換する
 const spotDefs = [
-  { id:'flowerbed', name:'花壇', relX:0.28, relY:0.62, r:60 },
-  { id:'tree',      name:'木',   relX:0.75, relY:0.38, r:65 },
-  { id:'pond',      name:'池',   relX:0.68, relY:0.75, r:70 },
-  { id:'shed',      name:'物置', relX:0.18, relY:0.30, r:55 },
+  { id:'flowerbed', name:'花壇', relX:0.28, relY:0.62, r:60, type:'gather' },
+  { id:'tree',      name:'木',   relX:0.75, relY:0.38, r:65, type:'gather' },
+  { id:'pond',      name:'池',   relX:0.68, relY:0.75, r:70, type:'gather' },
+  { id:'shed',      name:'物置', relX:0.18, relY:0.30, r:55, type:'workshop' },
 ];
 
 function layoutSpots(){
@@ -330,6 +435,30 @@ function weightedPick(list){
   for(const it of list){ r -= it.weight; if(r<=0) return it; }
   return list[0];
 }
+
+/* ---------------- DIYレシピ ---------------- */
+const recipes = [
+  { id:'chair_wood', name:'木のイス', desc:'庭にちょこんと置きたい', shape:'chair', color:'#a97c50',
+    materials:[{id:'wood', qty:3}] },
+  { id:'table_wood', name:'木のテーブル', desc:'お茶ができそう', shape:'table', color:'#a97c50',
+    materials:[{id:'wood', qty:5},{id:'nail', qty:2}] },
+  { id:'planter_flower', name:'花のプランター', desc:'種を飾って楽しむ', shape:'planter', color:'#c97b4a',
+    materials:[{id:'wood', qty:2},{id:'seed_flower', qty:1}] },
+  { id:'cushion', name:'ふわふわクッション', desc:'座り心地よさそう', shape:'cushion', color:'#e8c9a0',
+    materials:[{id:'cloth', qty:3}] },
+  { id:'lamp_shell', name:'貝殻ランプ', desc:'夜になると優しく光る', shape:'lamp', color:'#f2ece0',
+    materials:[{id:'shell', qty:2},{id:'pebble', qty:1}] },
+  { id:'bookshelf', name:'ミニ本棚', desc:'小物を並べられる', shape:'bookshelf', color:'#8a6238',
+    materials:[{id:'wood', qty:4},{id:'nail', qty:3}] },
+  { id:'acorn_deco', name:'どんぐりオブジェ', desc:'秋を先取りした飾り', shape:'acorn_deco', color:'#8a6238',
+    materials:[{id:'acorn', qty:3}] },
+  { id:'honey_rack', name:'はちみつラック', desc:'瓶を飾る棚', shape:'honey_rack', color:'#e3a63a',
+    materials:[{id:'wood', qty:2},{id:'honey', qty:1}] },
+];
+
+// レシピの素材名/色はitemPoolから逆引きできるようにしておく
+const materialInfo = {};
+Object.values(itemPool).flat().forEach(it=>{ materialInfo[it.id] = it; });
 
 /* ---------------- インベントリ (localStorage) ---------------- */
 const SAVE_KEY = 'niwa_inventory_v1';
@@ -456,7 +585,12 @@ gameCanvas.addEventListener('pointerdown', (e)=>{
 });
 
 document.getElementById('interactBtn').addEventListener('click', ()=>{
-  if(nearestSpot) triggerDiscovery(nearestSpot);
+  if(!nearestSpot) return;
+  if(nearestSpot.type === 'workshop'){
+    openDIY();
+  } else {
+    triggerDiscovery(nearestSpot);
+  }
 });
 
 document.getElementById('invBtn').addEventListener('click', ()=>{
@@ -545,6 +679,45 @@ function drawItemIcon(canvasEl, item, cx, cy, scale){
     case 'tool':
       rc.rectangle(cx-scale*0.15,cy-scale*0.7,scale*0.3,scale*1.0,opt);
       rc.circle(cx,cy+scale*0.4,scale*0.5,opt); break;
+    case 'chair':
+      rc.rectangle(cx-scale*0.5,cy-scale*0.1,scale*1.0,scale*0.18,opt);
+      rc.rectangle(cx-scale*0.5,cy-scale*0.85,scale*0.16,scale*0.75,opt);
+      rc.rectangle(cx+scale*0.34,cy-scale*0.85,scale*0.16,scale*0.75,opt);
+      rc.line(cx-scale*0.45,cy+scale*0.08,cx-scale*0.5,cy+scale*0.7,{stroke:col,strokeWidth:3,roughness:1.6,seed:70});
+      rc.line(cx+scale*0.45,cy+scale*0.08,cx+scale*0.5,cy+scale*0.7,{stroke:col,strokeWidth:3,roughness:1.6,seed:71});
+      break;
+    case 'table':
+      rc.rectangle(cx-scale*0.75,cy-scale*0.55,scale*1.5,scale*0.22,opt);
+      rc.line(cx-scale*0.6,cy-scale*0.33,cx-scale*0.65,cy+scale*0.65,{stroke:col,strokeWidth:4,roughness:1.6,seed:72});
+      rc.line(cx+scale*0.6,cy-scale*0.33,cx+scale*0.65,cy+scale*0.65,{stroke:col,strokeWidth:4,roughness:1.6,seed:73});
+      break;
+    case 'planter':
+      rc.polygon([[cx-scale*0.55,cy-scale*0.1],[cx+scale*0.55,cy-scale*0.1],[cx+scale*0.4,cy+scale*0.6],[cx-scale*0.4,cy+scale*0.6]],opt);
+      rc.circle(cx-scale*0.15,cy-scale*0.35,scale*0.32,{...opt, fill:'#6b8f5c', seed:74});
+      rc.circle(cx+scale*0.2,cy-scale*0.5,scale*0.28,{...opt, fill:'#e8a0bf', seed:75});
+      break;
+    case 'cushion':
+      rc.rectangle(cx-scale*0.65,cy-scale*0.5,scale*1.3,scale*1.0,{...opt, fillStyle:'hachure', hachureGap:4}); break;
+    case 'lamp':
+      rc.arc(cx,cy+scale*0.3,scale*1.2,scale*1.2,Math.PI,Math.PI*2,true,opt);
+      rc.line(cx,cy-scale*0.05,cx,cy-scale*0.65,{stroke:'#8a8580',strokeWidth:3,roughness:1.5,seed:76});
+      rc.circle(cx,cy-scale*0.8,scale*0.28,{fill:'#f4c95d', fillStyle:'solid', roughness:1.6, stroke:'#d9a93a', seed:77});
+      break;
+    case 'bookshelf':
+      rc.rectangle(cx-scale*0.55,cy-scale*0.75,scale*1.1,scale*1.5,opt);
+      rc.line(cx-scale*0.55,cy-scale*0.15,cx+scale*0.55,cy-scale*0.15,{stroke:'#5a4025',strokeWidth:2,roughness:1.6,seed:78});
+      rc.line(cx-scale*0.55,cy+scale*0.4,cx+scale*0.55,cy+scale*0.4,{stroke:'#5a4025',strokeWidth:2,roughness:1.6,seed:79});
+      break;
+    case 'acorn_deco':
+      rc.circle(cx-scale*0.3,cy+scale*0.2,scale*0.5,{...opt,seed:80});
+      rc.rectangle(cx-scale*0.5,cy-scale*0.25,scale*0.4,scale*0.28,{...opt, fill:'#6b4c2a', seed:81});
+      rc.circle(cx+scale*0.35,cy+scale*0.05,scale*0.6,{...opt,seed:82});
+      rc.rectangle(cx+scale*0.05,cy-scale*0.5,scale*0.5,scale*0.3,{...opt, fill:'#6b4c2a', seed:83});
+      break;
+    case 'honey_rack':
+      rc.rectangle(cx-scale*0.6,cy+scale*0.3,scale*1.2,scale*0.18,{...opt, fill:'#a97c50', seed:84});
+      rc.rectangle(cx-scale*0.28,cy-scale*0.45,scale*0.56,scale*0.7,{...opt, fill:'#e3a63a', fillStyle:'hachure', seed:85});
+      break;
     default:
       rc.circle(cx,cy,scale*0.6,opt);
   }
@@ -569,6 +742,103 @@ function triggerDiscovery(spot){
 document.getElementById('discoverClose').addEventListener('click', ()=>{
   document.getElementById('discoverOverlay').style.display = 'none';
 });
+
+/* ---------------- DIY (工房) ---------------- */
+function openDIY(){
+  renderRecipes();
+  document.getElementById('diyOverlay').style.display = 'flex';
+}
+function closeDIY(){
+  document.getElementById('diyOverlay').style.display = 'none';
+}
+document.getElementById('diyCloseBtn').addEventListener('click', closeDIY);
+document.getElementById('diyOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'diyOverlay') closeDIY();
+});
+
+function haveQty(materialId){
+  return inventory[materialId] ? inventory[materialId].count : 0;
+}
+
+function canCraft(recipe){
+  return recipe.materials.every(m => haveQty(m.id) >= m.qty);
+}
+
+function renderRecipes(){
+  const list = document.getElementById('diyList');
+  list.innerHTML = '';
+  recipes.forEach(recipe=>{
+    const ok = canCraft(recipe);
+
+    const row = document.createElement('div');
+    row.className = 'recipeRow';
+
+    const iconWrap = document.createElement('div');
+    iconWrap.className = 'icon';
+    const iconCv = document.createElement('canvas');
+    iconCv.width = 52; iconCv.height = 52;
+    iconWrap.appendChild(iconCv);
+    row.appendChild(iconWrap);
+    drawItemIcon(iconCv, recipe, 26, 28, 18);
+
+    const info = document.createElement('div');
+    info.className = 'info';
+    const nameEl = document.createElement('div');
+    nameEl.className = 'rName'; nameEl.textContent = recipe.name;
+    const descEl = document.createElement('div');
+    descEl.className = 'rDesc'; descEl.textContent = recipe.desc;
+    const matsEl = document.createElement('div');
+    matsEl.className = 'mats';
+    recipe.materials.forEach(m=>{
+      const mi = materialInfo[m.id];
+      const have = haveQty(m.id);
+      const chip = document.createElement('div');
+      chip.className = 'matChip' + (have < m.qty ? ' short' : '');
+      const chipCv = document.createElement('canvas');
+      chipCv.width = 20; chipCv.height = 20;
+      chip.appendChild(chipCv);
+      const label = document.createElement('span');
+      label.textContent = `${mi.name} ${have}/${m.qty}`;
+      chip.appendChild(label);
+      matsEl.appendChild(chip);
+      drawItemIcon(chipCv, mi, 10, 11, 7);
+    });
+    info.appendChild(nameEl);
+    info.appendChild(descEl);
+    info.appendChild(matsEl);
+    row.appendChild(info);
+
+    const btn = document.createElement('button');
+    btn.className = 'craftBtn';
+    btn.textContent = 'つくる';
+    btn.disabled = !ok;
+    btn.addEventListener('click', ()=>craftItem(recipe));
+    row.appendChild(btn);
+
+    list.appendChild(row);
+  });
+}
+
+function craftItem(recipe){
+  if(!canCraft(recipe)) return;
+  recipe.materials.forEach(m=>{
+    inventory[m.id].count -= m.qty;
+    if(inventory[m.id].count <= 0) delete inventory[m.id];
+  });
+  addItem({ id:recipe.id, name:recipe.name, desc:recipe.desc, shape:recipe.shape, color:recipe.color });
+  saveInventory(inventory);
+  updateInvBadge();
+  renderRecipes();
+  showDiyToast(recipe.name + 'を作ったよ!');
+}
+
+function showDiyToast(msg){
+  const t = document.getElementById('diyToast');
+  t.textContent = '✨ ' + msg;
+  t.classList.add('show');
+  clearTimeout(showDiyToast._timer);
+  showDiyToast._timer = setTimeout(()=>t.classList.remove('show'), 1600);
+}
 
 /* ---------------- ゲームループ ---------------- */
 let lastT = performance.now();
@@ -605,7 +875,9 @@ function update(dt){
     btn.style.display = 'block';
     btn.style.left = nearestSpot.x + 'px';
     btn.style.top = (nearestSpot.y - nearestSpot.r*0.4) + 'px';
-    btn.textContent = '🔍 ' + nearestSpot.name + 'をしらべる';
+    btn.textContent = nearestSpot.type === 'workshop'
+      ? '🔨 DIYする'
+      : '🔍 ' + nearestSpot.name + 'をしらべる';
   } else {
     btn.style.display = 'none';
   }
