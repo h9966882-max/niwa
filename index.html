@@ -377,6 +377,30 @@
   #placeEmpty{
     font-size:12px; color:var(--ink-soft); padding:10px 16px 20px;
   }
+  #furnitureActionPopup{
+    position:absolute; z-index:17;
+    transform:translate(-50%,-115%);
+    display:none;
+    gap:6px;
+    background:var(--cream);
+    border:2px solid var(--cream-edge);
+    border-radius:16px;
+    padding:8px;
+    box-shadow:0 3px 0 var(--cream-edge);
+  }
+  #furnitureActionPopup.show{ display:flex; }
+  #furnitureActionPopup button{
+    font-family:'Klee One', sans-serif;
+    font-size:12px; font-weight:600;
+    border:none;
+    border-radius:12px;
+    padding:8px 10px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  #faMove{ background:var(--sun); color:var(--ink); }
+  #faStore{ background:var(--leaf); color:#fff; }
+  #faCancel{ background:var(--cream-edge); color:var(--ink); padding:8px 12px; }
 </style>
 </head>
 <body>
@@ -424,6 +448,12 @@
       <button id="placeExitBtn">✕ 終了</button>
     </div>
     <div id="placeList"></div>
+  </div>
+
+  <div id="furnitureActionPopup">
+    <button id="faMove">🔀 動かす</button>
+    <button id="faStore">📦 しまう</button>
+    <button id="faCancel">✕</button>
   </div>
 </div>
 
@@ -708,11 +738,26 @@ gameCanvas.addEventListener('pointerdown', (e)=>{
   const rect = gameCanvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
-  if(placementActive && selectedFurnitureId){
-    placeFurnitureAt(x, y);
-  } else {
-    setTarget(x, y);
+
+  if(placementActive){
+    if(draggingItem){
+      completeMove(x, y);
+      return;
+    }
+    if(selectedFurnitureId){
+      placeFurnitureAt(x, y);
+      return;
+    }
+    const idx = hitTestPlaced(x, y);
+    if(idx !== -1){
+      showFurnitureActions(idx);
+    } else {
+      hideFurnitureActions();
+    }
+    return;
   }
+
+  setTarget(x, y);
 });
 
 document.getElementById('interactBtn').addEventListener('click', ()=>{
@@ -987,11 +1032,6 @@ function furnitureInInventory(){
 }
 
 document.getElementById('placeModeBtn').addEventListener('click', ()=>{
-  const list = furnitureInInventory();
-  if(list.length === 0){
-    showDiyToast('まだ置ける家具がないよ');
-    return;
-  }
   toggleInventory(false);
   openPlaceMode();
 });
@@ -1009,6 +1049,16 @@ function openPlaceMode(){
 function closePlaceMode(){
   placementActive = false;
   selectedFurnitureId = null;
+  // ドラッグ中(動かす途中)だったアイテムは元の場所に戻す
+  if(draggingItem){
+    placedItems.push({
+      itemId: draggingItem.itemId, shape: draggingItem.shape, color: draggingItem.color,
+      relX: draggingItem.fromRelX, relY: draggingItem.fromRelY
+    });
+    savePlaced();
+    draggingItem = null;
+  }
+  hideFurnitureActions();
   document.getElementById('placeBar').classList.remove('open');
   drawBackground();
 }
@@ -1018,8 +1068,7 @@ function renderPlaceList(){
   wrap.innerHTML = '';
   const list = furnitureInInventory();
   if(list.length === 0){
-    wrap.innerHTML = '<div id="placeEmpty">置ける家具がなくなったよ。DIYでまた作ろう🔨</div>';
-    closePlaceMode();
+    wrap.innerHTML = '<div id="placeEmpty">置ける家具がないよ。庭にある家具は動かしたりしまったりできるよ🖐️</div>';
     return;
   }
   list.forEach(item=>{
@@ -1072,6 +1121,81 @@ function placeFurnitureAt(x, y){
   drawBackground();
   renderPlaceList();
   if(!inventory[selectedFurnitureId]) selectedFurnitureId = null;
+}
+
+/* ---------------- 配置済み家具の 動かす/しまう ---------------- */
+let draggingItem = null;   // 動かしている最中のアイテム { itemId, shape, color, fromRelX, fromRelY }
+let actionTargetIndex = null; // 操作ポップアップの対象 (placedItemsのインデックス)
+
+function hitTestPlaced(x, y){
+  let best = -1, bestD = GRID * 0.65;
+  placedItems.forEach((p,i)=>{
+    const px = p.relX * W, py = p.relY * H;
+    const d = Math.hypot(x-px, y-py);
+    if(d < bestD){ bestD = d; best = i; }
+  });
+  return best;
+}
+
+function showFurnitureActions(idx){
+  actionTargetIndex = idx;
+  const p = placedItems[idx];
+  const popup = document.getElementById('furnitureActionPopup');
+  popup.style.left = (p.relX * W) + 'px';
+  popup.style.top = (p.relY * H) + 'px';
+  popup.classList.add('show');
+}
+
+function hideFurnitureActions(){
+  actionTargetIndex = null;
+  document.getElementById('furnitureActionPopup').classList.remove('show');
+}
+
+document.getElementById('faCancel').addEventListener('click', hideFurnitureActions);
+
+document.getElementById('faMove').addEventListener('click', ()=>{
+  if(actionTargetIndex === null) return;
+  const p = placedItems[actionTargetIndex];
+  draggingItem = { itemId:p.itemId, shape:p.shape, color:p.color, fromRelX:p.relX, fromRelY:p.relY };
+  placedItems.splice(actionTargetIndex, 1);
+  savePlaced();
+  hideFurnitureActions();
+  drawBackground();
+  document.getElementById('placeBarLabel').textContent = '動かす場所をタップしてね';
+});
+
+document.getElementById('faStore').addEventListener('click', ()=>{
+  if(actionTargetIndex === null) return;
+  const p = placedItems[actionTargetIndex];
+  const recipe = recipes.find(r=>r.id === p.itemId);
+  placedItems.splice(actionTargetIndex, 1);
+  savePlaced();
+  if(recipe){
+    addItem({ id:recipe.id, name:recipe.name, desc:recipe.desc, shape:recipe.shape, color:recipe.color, category:'furniture' });
+  }
+  hideFurnitureActions();
+  drawBackground();
+  renderPlaceList();
+  showDiyToast((recipe ? recipe.name : '家具') + 'をしまったよ');
+});
+
+function completeMove(x, y){
+  const col = Math.round(x / GRID);
+  const row = Math.round(y / GRID);
+  const snapX = col * GRID;
+  const snapY = row * GRID;
+  const bottom = H - placeBarHeight();
+  if(snapY < 100 || snapY > bottom - 20) return; // 置けない場所は無視してドラッグ続行
+
+  placedItems.push({
+    itemId: draggingItem.itemId, shape: draggingItem.shape, color: draggingItem.color,
+    relX: snapX / W, relY: snapY / H
+  });
+  savePlaced();
+  draggingItem = null;
+  drawBackground();
+  document.getElementById('placeBarLabel').textContent = '置きたい家具をえらんでね';
+  renderPlaceList();
 }
 
 /* ---------------- ゲームループ ---------------- */
